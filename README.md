@@ -12,3 +12,15 @@ The message server's purpose is to print messages that it receives from the clie
 The project's purpose is to study Kerberos protocol and cyber security fundmentals such as: symmetric encryption, exploits and more.
 
 Question 2 involves the implementation of an offline dictionary attack on the protocol, along with a suggestion to prevent this attack.
+
+## Installtions Instructions:
+1. Install PyCryptodome:
+   ```bash
+   > pip install pycryptodome
+   ```
+2. Place the files that are located in Q1 folder in your IDE.
+
+## How to use ?
+1. Run the authenticator_server.py.
+2. Run the messages_server.py.
+3. Run the client.py.
