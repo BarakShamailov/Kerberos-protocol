@@ -21,7 +21,6 @@ import threading
 import utils
 import datetime
 
-SERVER_NAME = "Barak's Server"
 MSG_FILE = "msg.info.txt"
 AUTH_FILE = "auth.info.txt"
 PACKET_SIZE = 2048
@@ -52,27 +51,45 @@ class MessagesServer:
 
     def reading_connection_server(self,file_name):
         if os.path.exists(MSG_FILE):
-            with open(file_name,"r") as file:
-                lines = file.readlines()
-                ip,port = lines[0][:-1].split(":")# Without \n
-                if file_name == MSG_FILE:
-                    self.server_name = lines[1][:-1] # Without \n
-                    self.server_id = bytes.fromhex(lines[2][:-1])# Without \n
-                    self.server_key = base64.b64decode(lines[3])
-            return ip, int(port)
+            try:
+                with open(file_name,"r") as file:
+                    lines = file.readlines()
+                    ip,port = lines[0][:-1].split(":")# Without \n
+                    if file_name == MSG_FILE:
+                        self.server_name = lines[1][:-1] # Without \n
+                        self.server_id = bytes.fromhex(lines[2][:-1])# Without \n
+                        self.server_key = base64.b64decode(lines[3])
+                return ip, int(port)
+            except:
+                print("[ERROR] Error occurred when trying to read data from msg.info file.")
+                exit(1)
         else:
             print(f"[INFO] - the file {MSG_FILE} is not exists.")
-            self.server_name = input("Please insert the server name: ")
+            while True:
+                self.server_name = input("Please insert the server name: ")
+                if len(self.server_name) < protocol.SERVER_NAME_SIZE:
+                    break
+                print("[ERROR] The name is too long, please try again.")
             with open(MSG_FILE, "w") as file:
                 file.write(f"{DEFAULT_IP}:{DEFAULT_PORT}\n")
                 file.write(self.server_name + "\n")
-            return DEFAULT_IP,DEFAULT_PORT
+            return DEFAULT_IP, DEFAULT_PORT
+
+    def read_auth_info(self):
+        if os.path.exists(AUTH_FILE):
+            with open(AUTH_FILE, "r") as file:
+                line = file.readline()
+                auth_line = line.split(":")
+                return auth_line[0], int(auth_line[1])
+        else:
+            print(f"[ERROR] The {AUTH_FILE} is not exists, please try again.")
+            exit(1)
 
     def start_server(self):
         # If the server is not registered
         if not self.server_id and not self.server_key:
             server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server.connect((self.reading_connection_server(AUTH_FILE)))
+            server.connect((self.read_auth_info()))
             print("[INFO] Connecting to authenticator server.")
             data_packed = self.request_handle[REGISTER_REQUEST](REGISTER_REQUEST)
             server.send(data_packed)
@@ -81,6 +98,7 @@ class MessagesServer:
             auth_server_response = protocol.ServerRegistrationResponse()
             if not auth_server_response.unpack(response_data):
                 print("[INFO] The registration failed, please try again.")
+                os.remove(MSG_FILE)
                 exit(1)
             print("[INFO] The registration was successful.")
             self.server_id = auth_server_response.id
@@ -139,7 +157,9 @@ class MessagesServer:
         client_request = protocol.SendMsgServerSymmetryKeyRequest()
         client_id_header,version_header = client_request.unpack_header(data)
         version_ticket, client_id_ticket, server_id_ticket, timestamp_ticket, ticket_iv, aes_key_ticket, expiration_time_ticket = client_request.unpack_ticket(data)
+
         auth_iv, encrypted_version_auth, encrypted_client_id_auth, server_id_auth, creation_time_auth = client_request.unpack_auth(data)
+
         # Check match between the header request data to the ticket data
         if version_ticket != version_header or client_id_ticket.hex() != client_id_header.hex() or server_id_ticket != self.server_id:
             server_msg = ERROR_MSG.encode("utf-8")
@@ -198,7 +218,7 @@ class MessagesServer:
         msg = "Accept symmetry key".encode("utf-8")
         self.clients.append(client_id_ticket.hex())
         response = protocol.SendMsgServerResponse().pack(protocol.EMessagesServerResponseCode.RESPONSE_SYMMETRY_KEY_APPROVE.value,msg)
-        print("[INFO] Sending response to Symmetry Key request.")
+
         return response
     """Handle message request that got from the client"""
     def handle_msg_request(self, data):
