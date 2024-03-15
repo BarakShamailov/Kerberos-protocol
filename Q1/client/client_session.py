@@ -33,7 +33,7 @@ class ClientRequestHeader:
         self.name = ""
         self.id = ""
         self.version = VERSION
-        self.password = input("Please insert your password: ")
+        self.password = self.check_password()
         self.nonce = b""
         self.session_key = b""
         self.server_id = b""
@@ -60,11 +60,13 @@ class ClientRequestHeader:
                 lines = file.readlines()
                 self.name = lines[0][:-1] # Without \n
                 self.id = bytes.fromhex(lines[1][:-1])# Without \n
-
-
         else:
             print(f"[INFO] The {ME_FILE} is not exists.")
-            self.name = input("Please insert your name: ")
+            while True:
+                self.name = input("Please insert your name: ")
+                if len(self.name) < protocol.CLIENT_NAME_SIZE:
+                    break
+                print("[ERROR] The name is too long, please try again.")
             with open(ME_FILE, "w") as file:
                 file.write(self.name + "\n")
 
@@ -146,8 +148,10 @@ class ClientRequestHeader:
             if decrypted_nonce != self.nonce:
                 print("[ERROR] The nonce from the server is not equal to client's nonce, closing...")
                 exit()
+
             decrypted_aes_key = utils.decrypt_data(client_key,server_response.client_encrypted_aes_key,server_response.iv)
-            self.session_key =decrypted_aes_key
+            self.session_key = decrypted_aes_key
+
             # creating the authenticator
             auth_iv = get_random_bytes(protocol.IV_SIZE)
             encrypted_version = utils.encrypt_data(decrypted_aes_key,struct.pack("<B",server_response.version),auth_iv)
@@ -155,6 +159,7 @@ class ClientRequestHeader:
             encrypted_server_id = utils.encrypt_data(decrypted_aes_key, bytes.fromhex(self.server_id), auth_iv)
             creation_time = datetime.datetime.now().strftime('%d-%m-%y %H:%M').encode("utf-8")
             encrypted_time = utils.encrypt_data(decrypted_aes_key, creation_time, auth_iv)
+
             # build the request and its data to the msg server.
             request = protocol.SendMsgServerSymmetryKeyRequest(auth_iv,encrypted_version,encrypted_client_id,encrypted_server_id,encrypted_time)
             code_request = protocol.EMessagesServerRequestCode.SYMMETRY_KEY_REQUEST.value
@@ -204,6 +209,13 @@ class ClientRequestHeader:
         except:
             return False
 
+    def check_password(self):
+        while True:
+            password = input("Please insert the password: ")
+            if len(password) < protocol.PASSWORD_SIZE:
+                break
+            print("[ERROR] The password is too long, please try again.")
+        return password
 
 
 
